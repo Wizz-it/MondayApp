@@ -1,6 +1,6 @@
 # mondayapp
 
-A new Flutter project.
+Just a to-do-List app but with an extra gimmick. 
 
 ## Getting Started
 
