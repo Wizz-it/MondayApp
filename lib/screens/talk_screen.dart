@@ -1,0 +1,324 @@
+import 'package:flutter/material.dart';
+
+import '../services/app_store.dart';
+import '../theme/app_theme.dart';
+import '../theme/palette.dart';
+import '../widgets/monday_buttons.dart';
+import '../widgets/screen_header.dart';
+
+/// The central assistant surface.
+///
+/// Voice capture is not wired up yet, so the screen presents the reference's
+/// typed fallback: tapping the mic explains that speech is unavailable and
+/// hands over to the text field, which saves straight to the inbox.
+class TalkScreen extends StatefulWidget {
+  const TalkScreen({super.key});
+
+  @override
+  State<TalkScreen> createState() => _TalkScreenState();
+}
+
+class _TalkScreenState extends State<TalkScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  )..repeat(reverse: true);
+
+  final _input = TextEditingController();
+  final _focus = FocusNode();
+  bool _micAttempted = false;
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    _input.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _onMicTap() {
+    setState(() => _micAttempted = true);
+    _focus.requestFocus();
+  }
+
+  void _submit() {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    AppScope.read(context).captureThought(text);
+    _input.clear();
+    _focus.unfocus();
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved to your inbox.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+
+    return Scaffold(
+      backgroundColor: p.canvas,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: kMondayGutter),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 12),
+              const MondayBackButton(),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 24),
+                      AnimatedBuilder(
+                        animation: _pulse,
+                        builder: (context, _) => CustomPaint(
+                          size: const Size(260, 220),
+                          painter: _OrbPainter(
+                            glow: p.heroGlow,
+                            core: p.green,
+                            t: _pulse.value,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      const EyebrowLabel(
+                        'A MOMENT OF CLARITY',
+                        leadingRule: true,
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        "What's on\nyour mind?",
+                        textAlign: TextAlign.center,
+                        style: MondayType.display.copyWith(
+                          color: p.ink,
+                          fontSize: 36,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Capture a thought or speak it out loud. MONDAY will '
+                        'keep it safe in your inbox.',
+                        textAlign: TextAlign.center,
+                        style: MondayType.body.copyWith(
+                          color: p.inkMuted,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      _MicButton(onTap: _onMicTap),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Tap to speak',
+                        style: MondayType.rowTitle.copyWith(
+                          color: p.ink,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      if (_micAttempted) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          'Voice input is not available yet. You can type '
+                          'below instead.',
+                          textAlign: TextAlign.center,
+                          style: MondayType.rowMeta.copyWith(
+                            color: p.inkMuted,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: _TypeField(
+                  controller: _input,
+                  focusNode: _focus,
+                  onChanged: (_) => setState(() {}),
+                  onSubmit: _submit,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MicButton extends StatelessWidget {
+  const _MicButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Center(
+      child: Material(
+        color: p.green,
+        shape: const CircleBorder(),
+        elevation: 8,
+        shadowColor: p.green.withValues(alpha: 0.4),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 66,
+            height: 66,
+            child: Icon(Icons.mic_none, size: 27, color: p.onGreen),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeField extends StatelessWidget {
+  const _TypeField({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final hasText = controller.text.trim().isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(MondayRadius.pill),
+        border: Border.all(color: p.hairline),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 6, 6, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onChanged: onChanged,
+              onSubmitted: (_) => onSubmit(),
+              textInputAction: TextInputAction.send,
+              cursorColor: p.green,
+              style: MondayType.body.copyWith(color: p.ink, fontSize: 14),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                hintText: "Or type what's on your mind...",
+                hintStyle: MondayType.body.copyWith(
+                  color: p.inkFaint,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: hasText ? p.green : p.tileSage,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: hasText ? onSubmit : null,
+              customBorder: const CircleBorder(),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(
+                  Icons.arrow_forward,
+                  size: 18,
+                  color: hasText ? p.onGreen : p.onTile,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The large breathing orb at the top of the Talk screen.
+class _OrbPainter extends CustomPainter {
+  _OrbPainter({required this.glow, required this.core, required this.t});
+
+  final Color glow;
+  final Color core;
+
+  /// Animation position, 0..1, driving a slow expansion of the rings.
+  final double t;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final breathe = 1 + (t * 0.06);
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (final (i, r) in [66.0, 94.0, 122.0].indexed) {
+      ringPaint.color = glow.withValues(alpha: 0.26 - i * 0.07);
+      canvas.drawCircle(center, r * breathe, ringPaint);
+    }
+
+    // Two small satellite dots, as in the reference.
+    final dot = Paint()..color = glow.withValues(alpha: 0.9);
+    canvas.drawCircle(center + Offset(62, -58) * breathe, 3.5, dot);
+    canvas.drawCircle(center + Offset(-86, 30) * breathe, 3, dot);
+
+    final radius = 48.0 * breathe;
+    canvas.drawCircle(
+      center,
+      radius * 1.5,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            glow.withValues(alpha: 0.35),
+            glow.withValues(alpha: 0.0),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 1.5)),
+    );
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = RadialGradient(
+          center: Alignment.topLeft,
+          radius: 1.2,
+          colors: [glow, core],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+
+    // The waveform glyph inside the orb.
+    final bar = Paint()
+      ..color = Colors.white.withValues(alpha: 0.92)
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round;
+    for (final (i, h) in [9.0, 15.0, 7.0].indexed) {
+      final dx = center.dx + (i - 1) * 9;
+      canvas.drawLine(
+        Offset(dx, center.dy - h),
+        Offset(dx, center.dy + h),
+        bar,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OrbPainter old) =>
+      old.t != t || old.glow != glow || old.core != core;
+}
