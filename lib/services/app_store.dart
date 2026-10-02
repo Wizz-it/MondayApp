@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/calendar_event.dart';
@@ -7,6 +11,7 @@ import '../models/project.dart';
 import '../models/task.dart';
 import '../models/tile_tint.dart';
 import '../utils/date_labels.dart';
+import 'app_storage.dart';
 
 /// Which slice of the task list the Tasks screen is showing.
 enum TaskFilter {
@@ -19,15 +24,133 @@ enum TaskFilter {
   final String label;
 }
 
-/// A single in-memory store for the whole app.
+/// A single store for the whole app, and the only thing screens talk to.
 ///
-/// This is deliberately simple: no persistence, no repositories, no DI. It
-/// exists so the redesigned UI can behave the way the reference implies —
-/// checkboxes toggle, counters move, empty states appear — and it is meant to
-/// be replaced wholesale once a real data layer lands.
+/// State lives in memory. When the store is given an [AppStorage], every
+/// mutation also writes a JSON snapshot of that state, and [AppStore.open]
+/// reads it back on the next launch. Screens never touch storage directly.
 class AppStore extends ChangeNotifier {
-  AppStore({DateTime? seedDate}) {
+  /// A seeded store. Without [storage] nothing is saved, which is what tests
+  /// that only exercise behaviour want.
+  AppStore({DateTime? seedDate, this._storage}) {
     _seed(seedDate ?? DateTime.now());
+  }
+
+  AppStore._restored(Map<String, dynamic> json, this._storage) {
+    _restore(json);
+  }
+
+  /// Loads the saved snapshot from [storage], or seeds and saves the default
+  /// data when there is none yet (first launch).
+  static Future<AppStore> open(AppStorage storage, {DateTime? seedDate}) async {
+    final saved = await storage.read();
+    if (saved != null) {
+      try {
+        return AppStore._restored(
+          jsonDecode(saved) as Map<String, dynamic>,
+          storage,
+        );
+      } catch (error) {
+        // Unreadable snapshot. Starting over beats refusing to open, and the
+        // fresh seed below replaces it.
+        debugPrint('MONDAY: could not read saved state, reseeding: $error');
+      }
+    }
+    final store = AppStore(seedDate: seedDate, storage: storage).._queueSave();
+    await store.flush();
+    return store;
+  }
+
+  // Persistence ------------------------------------------------------------
+
+  /// Bump when the snapshot shape changes in a way old readers can't handle.
+  static const schemaVersion = 1;
+
+  final AppStorage? _storage;
+  Future<void> _writes = Future.value();
+  bool _savePending = false;
+
+  /// Notifies listeners and queues a save. Saves are batched to one write per
+  /// microtask, so a handler that changes several things writes once.
+  void _commit() {
+    notifyListeners();
+    _queueSave();
+  }
+
+  void _queueSave() {
+    if (_storage == null || _savePending) return;
+    _savePending = true;
+    scheduleMicrotask(_save);
+  }
+
+  void _save() {
+    final storage = _storage;
+    // Already written by an explicit flush().
+    if (storage == null || !_savePending) return;
+    _savePending = false;
+    // Encode now, so the write carries the state as of this moment even if it
+    // has to wait behind an earlier write.
+    final snapshot = jsonEncode(toJson());
+    _writes = _writes.then((_) => storage.write(snapshot)).catchError(
+          (Object error) => debugPrint('MONDAY: could not save state: $error'),
+        );
+  }
+
+  /// Completes once every change made so far has reached storage.
+  Future<void> flush() {
+    if (_savePending) _save();
+    return _writes;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'version': schemaVersion,
+        'nextId': _nextId,
+        'preferences': {
+          'themeMode': themeMode.name,
+          'notificationsEnabled': notificationsEnabled,
+        },
+        'projects': [for (final p in projects) p.toJson()],
+        'tasks': [for (final t in tasks) t.toJson()],
+        'events': [for (final e in events) e.toJson()],
+        'notes': [for (final n in notes) n.toJson()],
+        'inbox': [for (final i in inbox) i.toJson()],
+      };
+
+  void _restore(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> list(String key) =>
+        (json[key] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+
+    final prefs = json['preferences'] as Map<String, dynamic>? ?? const {};
+    themeMode =
+        ThemeMode.values.asNameMap()[prefs['themeMode']] ?? ThemeMode.light;
+    notificationsEnabled = prefs['notificationsEnabled'] as bool? ?? true;
+
+    projects.addAll(list('projects').map(Project.fromJson));
+    tasks.addAll(list('tasks').map(Task.fromJson));
+    events.addAll(list('events').map(CalendarEvent.fromJson));
+    notes.addAll(list('notes').map(Note.fromJson));
+    inbox.addAll(list('inbox').map(InboxItem.fromJson));
+
+    // Never hand out an id that is already taken, even if the saved counter
+    // is missing or behind.
+    _nextId = math.max(json['nextId'] as int? ?? 0, _idFloor());
+  }
+
+  /// One past the highest numeric id suffix in use (`task_7` → 8).
+  int _idFloor() {
+    final ids = [
+      ...tasks.map((t) => t.id),
+      ...events.map((e) => e.id),
+      ...projects.map((p) => p.id),
+      ...notes.map((n) => n.id),
+      ...inbox.map((i) => i.id),
+    ];
+    var floor = 0;
+    for (final id in ids) {
+      final n = int.tryParse(id.substring(id.lastIndexOf('_') + 1));
+      if (n != null && n >= floor) floor = n + 1;
+    }
+    return floor;
   }
 
   // Preferences ------------------------------------------------------------
@@ -40,12 +163,12 @@ class AppStore extends ChangeNotifier {
 
   void toggleThemeMode() {
     themeMode = isDarkMode ? ThemeMode.light : ThemeMode.dark;
-    notifyListeners();
+    _commit();
   }
 
   void setNotificationsEnabled(bool value) {
     notificationsEnabled = value;
-    notifyListeners();
+    _commit();
   }
 
   // Collections ------------------------------------------------------------
@@ -166,13 +289,13 @@ class AppStore extends ChangeNotifier {
       dueDate: dueDate,
     );
     tasks.add(task);
-    notifyListeners();
+    _commit();
     return task;
   }
 
   void toggleTask(Task task) {
     task.isDone = !task.isDone;
-    notifyListeners();
+    _commit();
   }
 
   void updateTask(
@@ -196,7 +319,7 @@ class AppStore extends ChangeNotifier {
     if (priority != null) task.priority = priority;
     if (projectId != null) task.projectId = projectId;
     if (clearProject) task.projectId = null;
-    notifyListeners();
+    _commit();
   }
 
   /// Looks a task up by id. Detail screens hold an id rather than a reference
@@ -210,7 +333,7 @@ class AppStore extends ChangeNotifier {
 
   void deleteTask(Task task) {
     tasks.remove(task);
-    notifyListeners();
+    _commit();
   }
 
   // Events -----------------------------------------------------------------
@@ -236,12 +359,12 @@ class AppStore extends ChangeNotifier {
       start: start,
       description: description,
     ));
-    notifyListeners();
+    _commit();
   }
 
   void deleteEvent(CalendarEvent event) {
     events.remove(event);
-    notifyListeners();
+    _commit();
   }
 
   /// Days in [month] that have at least one task or event, for the calendar
@@ -281,7 +404,7 @@ class AppStore extends ChangeNotifier {
       description: description,
       tint: projects.length.isEven ? TileTint.sage : TileTint.lilac,
     ));
-    notifyListeners();
+    _commit();
   }
 
   void deleteProject(Project project) {
@@ -289,25 +412,25 @@ class AppStore extends ChangeNotifier {
     for (final task in tasks) {
       if (task.projectId == project.id) task.projectId = null;
     }
-    notifyListeners();
+    _commit();
   }
 
   // Notes ------------------------------------------------------------------
 
   void addNote({required String title, String body = ''}) {
     notes.add(Note(id: _id('note'), title: title, body: body));
-    notifyListeners();
+    _commit();
   }
 
   void updateNote(Note note, {String? title, String? body}) {
     if (title != null) note.title = title;
     if (body != null) note.body = body;
-    notifyListeners();
+    _commit();
   }
 
   void deleteNote(Note note) {
     notes.remove(note);
-    notifyListeners();
+    _commit();
   }
 
   // Inbox ------------------------------------------------------------------
@@ -318,12 +441,12 @@ class AppStore extends ChangeNotifier {
       text: text,
       capturedAt: DateTime.now(),
     ));
-    notifyListeners();
+    _commit();
   }
 
   void deleteInboxItem(InboxItem item) {
     inbox.remove(item);
-    notifyListeners();
+    _commit();
   }
 }
 

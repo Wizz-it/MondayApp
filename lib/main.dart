@@ -4,24 +4,32 @@ import 'screens/calendar_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/tasks_screen.dart';
+import 'services/app_storage.dart';
 import 'services/app_store.dart';
 import 'theme/app_theme.dart';
 import 'theme/palette.dart';
 import 'widgets/monday_bottom_nav.dart';
 
-void main() {
-  runApp(const MondayApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Load saved data before the first frame so the UI never shows seed data
+  // that is about to be replaced. The platform splash covers the wait.
+  final store = await AppStore.open(SharedPreferencesAppStorage());
+  runApp(MondayApp(store: store));
 }
 
 class MondayApp extends StatefulWidget {
-  const MondayApp({super.key});
+  /// Without a [store] the app runs on seeded, unsaved data (used by tests).
+  const MondayApp({super.key, this.store});
+
+  final AppStore? store;
 
   @override
   State<MondayApp> createState() => _MondayAppState();
 }
 
 class _MondayAppState extends State<MondayApp> {
-  final AppStore _store = AppStore();
+  late final AppStore _store = widget.store ?? AppStore();
 
   @override
   void dispose() {
