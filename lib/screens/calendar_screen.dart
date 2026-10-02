@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/calendar_event.dart';
 import '../services/app_store.dart';
 import '../theme/palette.dart';
 import '../utils/date_labels.dart';
@@ -11,6 +12,7 @@ import '../widgets/monday_buttons.dart';
 import '../widgets/monday_screen.dart';
 import '../widgets/month_grid.dart';
 import '../widgets/screen_header.dart';
+import 'event_detail_screen.dart';
 import 'task_detail_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -24,6 +26,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
   late DateTime _selectedDay = dayOf(DateTime.now());
   late DateTime _visibleMonth = DateTime(_selectedDay.year, _selectedDay.month);
 
+  /// Brings [day] into view and selects it.
+  void _show(DateTime day) {
+    setState(() {
+      _selectedDay = dayOf(day);
+      _visibleMonth = DateTime(day.year, day.month);
+    });
+  }
+
+  Future<void> _addEvent() async {
+    final created = await showNewEventSheet(context, initialDay: _selectedDay);
+    // The sheet lets the user pick any date, so follow the new event there.
+    if (created != null && mounted) _show(created.start);
+  }
+
+  Future<void> _openEvent(CalendarEvent event) async {
+    final store = AppScope.read(context);
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: event.id)),
+    );
+    // If the event was moved to another day, follow it.
+    final moved = store.eventById(event.id);
+    if (moved != null && mounted && !isSameDay(moved.start, _selectedDay)) {
+      _show(moved.start);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
@@ -34,9 +62,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final isToday = isSameDay(_selectedDay, DateTime.now());
 
     return MondayScreen(
-      fab: MondayFab(
-        onPressed: () => showNewEventSheet(context, initialDay: _selectedDay),
-      ),
+      fab: MondayFab(onPressed: _addEvent),
       children: [
         const ScreenHeader(
           eyebrow: 'MONDAY  /  CALENDAR',
@@ -64,8 +90,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             title: 'Nothing planned',
             message: 'This day is still open. Add an event to fill it in.',
             actionLabel: 'Add an event',
-            onAction: () =>
-                showNewEventSheet(context, initialDay: _selectedDay),
+            onAction: _addEvent,
           )
         else
           GroupedCard(
@@ -78,6 +103,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                   title: Text(event.title),
                   subtitle: Text('Event · ${timeLabel(event.start)}'),
+                  trailing: const RowChevron(),
+                  onTap: () => _openEvent(event),
                 ),
               for (final task in tasks)
                 MondayRow(

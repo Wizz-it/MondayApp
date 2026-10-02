@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../models/calendar_event.dart';
 import '../services/app_store.dart';
 import '../theme/palette.dart';
 import '../utils/date_labels.dart';
 import 'monday_sheet.dart';
 
 /// The five creation flows from the reference. Each is a bottom sheet sharing
-/// the [MondaySheet] chrome; each writes straight to the [AppStore].
+/// the [MondaySheet] chrome; each writes straight to the [AppStore]. The event
+/// sheet doubles as the edit form for an existing event.
 
 Future<void> showNewTaskSheet(BuildContext context, {String? projectId}) {
   return showMondaySheet<void>(
@@ -15,10 +17,26 @@ Future<void> showNewTaskSheet(BuildContext context, {String? projectId}) {
   );
 }
 
-Future<void> showNewEventSheet(BuildContext context, {DateTime? initialDay}) {
-  return showMondaySheet<void>(
+/// Completes with the created event, or null if the sheet was dismissed.
+Future<CalendarEvent?> showNewEventSheet(
+  BuildContext context, {
+  DateTime? initialDay,
+}) {
+  return showMondaySheet<CalendarEvent>(
     context: context,
-    builder: (_) => _NewEventSheet(initialDay: initialDay),
+    builder: (_) => _EventSheet(initialDay: initialDay),
+  );
+}
+
+/// The new-event sheet, opened pre-filled. Completes with the event once it
+/// has been saved, or null if the sheet was dismissed.
+Future<CalendarEvent?> showEditEventSheet(
+  BuildContext context,
+  CalendarEvent event,
+) {
+  return showMondaySheet<CalendarEvent>(
+    context: context,
+    builder: (_) => _EventSheet(event: event),
   );
 }
 
@@ -134,48 +152,68 @@ class _NewTaskSheetState extends State<_NewTaskSheet> {
   }
 }
 
-// New event ------------------------------------------------------------------
+// New / edit event -----------------------------------------------------------
 
-class _NewEventSheet extends StatefulWidget {
-  const _NewEventSheet({this.initialDay});
+class _EventSheet extends StatefulWidget {
+  const _EventSheet({this.initialDay, this.event});
 
   final DateTime? initialDay;
 
+  /// The event being edited, or null when creating one.
+  final CalendarEvent? event;
+
   @override
-  State<_NewEventSheet> createState() => _NewEventSheetState();
+  State<_EventSheet> createState() => _EventSheetState();
 }
 
-class _NewEventSheetState extends State<_NewEventSheet> {
-  final _name = TextEditingController();
-  late DateTime _date = dayOf(widget.initialDay ?? DateTime.now());
-  TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
+class _EventSheetState extends State<_EventSheet> {
+  late final _name = TextEditingController(text: widget.event?.title);
+  late final _description =
+      TextEditingController(text: widget.event?.description);
+  late DateTime _date =
+      dayOf(widget.event?.start ?? widget.initialDay ?? DateTime.now());
+  late TimeOfDay _time = widget.event == null
+      ? const TimeOfDay(hour: 9, minute: 0)
+      : TimeOfDay.fromDateTime(widget.event!.start);
   late final _dateCtrl = TextEditingController(text: slashDate(_date));
   late final _timeCtrl = TextEditingController(text: _formattedTime);
 
-  String get _formattedTime => dottedTime(
-        DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute),
-      );
+  bool get _isEditing => widget.event != null;
+
+  DateTime get _start =>
+      DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
+
+  String get _formattedTime => dottedTime(_start);
 
   @override
   void dispose() {
     _name.dispose();
+    _description.dispose();
     _dateCtrl.dispose();
     _timeCtrl.dispose();
     super.dispose();
   }
 
   void _submit() {
-    AppScope.read(context).addEvent(
-      title: _name.text.trim(),
-      start: DateTime(
-        _date.year,
-        _date.month,
-        _date.day,
-        _time.hour,
-        _time.minute,
-      ),
-    );
-    Navigator.of(context).pop();
+    final store = AppScope.read(context);
+    final existing = widget.event;
+    final CalendarEvent saved;
+    if (existing == null) {
+      saved = store.addEvent(
+        title: _name.text.trim(),
+        start: _start,
+        description: _description.text.trim(),
+      );
+    } else {
+      store.updateEvent(
+        existing,
+        title: _name.text.trim(),
+        start: _start,
+        description: _description.text.trim(),
+      );
+      saved = existing;
+    }
+    Navigator.of(context).pop(saved);
   }
 
   @override
@@ -183,15 +221,16 @@ class _NewEventSheetState extends State<_NewEventSheet> {
     final p = context.palette;
 
     return MondaySheet(
-      title: 'New event',
-      actionLabel: 'Create event',
+      eyebrow: _isEditing ? 'MAKE IT YOURS' : 'MAKE IT HAPPEN',
+      title: _isEditing ? 'Edit event' : 'New event',
+      actionLabel: _isEditing ? 'Save changes' : 'Create event',
       onAction: _name.text.trim().isEmpty ? null : _submit,
       children: [
         MondayField(
           label: 'Name',
           child: MondayTextField(
             controller: _name,
-            autofocus: true,
+            autofocus: !_isEditing,
             hintText: "What's happening?",
             onChanged: (_) => setState(() {}),
           ),
@@ -250,6 +289,16 @@ class _NewEventSheetState extends State<_NewEventSheet> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 20),
+        MondayField(
+          label: 'Description',
+          optional: true,
+          child: MondayTextField(
+            controller: _description,
+            maxLines: 4,
+            hintText: 'Add a little more detail...',
+          ),
         ),
       ],
     );

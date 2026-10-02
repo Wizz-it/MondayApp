@@ -348,17 +348,39 @@ class AppStore extends ChangeNotifier {
       ..sort((a, b) => a.start.compareTo(b.start));
   }
 
-  void addEvent({
+  CalendarEvent addEvent({
     required String title,
     required DateTime start,
     String description = '',
   }) {
-    events.add(CalendarEvent(
+    final event = CalendarEvent(
       id: _id('event'),
       title: title,
       start: start,
       description: description,
-    ));
+    );
+    events.add(event);
+    _commit();
+    return event;
+  }
+
+  /// Looks an event up by id, for the same reason as [taskById].
+  CalendarEvent? eventById(String id) {
+    for (final event in events) {
+      if (event.id == id) return event;
+    }
+    return null;
+  }
+
+  void updateEvent(
+    CalendarEvent event, {
+    String? title,
+    DateTime? start,
+    String? description,
+  }) {
+    if (title != null) event.title = title;
+    if (start != null) event.start = start;
+    if (description != null) event.description = description;
     _commit();
   }
 
