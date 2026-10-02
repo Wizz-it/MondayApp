@@ -61,7 +61,7 @@ class ProjectDetailScreen extends StatelessWidget {
                   onToggle: () => store.toggleTask(task),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => TaskDetailScreen(task: task),
+                      builder: (_) => TaskDetailScreen(taskId: task.id),
                     ),
                   ),
                 ),

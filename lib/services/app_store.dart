@@ -182,8 +182,10 @@ class AppStore extends ChangeNotifier {
     DateTime? dueDate,
     DateTime? reminder,
     TaskPriority? priority,
+    String? projectId,
     bool clearDueDate = false,
     bool clearReminder = false,
+    bool clearProject = false,
   }) {
     if (title != null) task.title = title;
     if (description != null) task.description = description;
@@ -192,7 +194,18 @@ class AppStore extends ChangeNotifier {
     if (reminder != null) task.reminder = reminder;
     if (clearReminder) task.reminder = null;
     if (priority != null) task.priority = priority;
+    if (projectId != null) task.projectId = projectId;
+    if (clearProject) task.projectId = null;
     notifyListeners();
+  }
+
+  /// Looks a task up by id. Detail screens hold an id rather than a reference
+  /// so they notice when the task they were showing has been deleted.
+  Task? taskById(String id) {
+    for (final task in tasks) {
+      if (task.id == id) return task;
+    }
+    return null;
   }
 
   void deleteTask(Task task) {

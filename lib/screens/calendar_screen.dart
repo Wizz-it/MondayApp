@@ -92,7 +92,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   trailing: const RowChevron(),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => TaskDetailScreen(task: task),
+                      builder: (_) => TaskDetailScreen(taskId: task.id),
                     ),
                   ),
                 ),

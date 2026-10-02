@@ -217,3 +217,130 @@ class MondayTextField extends StatelessWidget {
     );
   }
 }
+
+/// A read-only field that opens a chooser. Visually identical to
+/// [MondayTextField] so priority and project sit beside the typed fields
+/// without introducing a second form style.
+class MondaySelectField extends StatelessWidget {
+  const MondaySelectField({
+    super.key,
+    required this.value,
+    required this.onTap,
+    this.icon = Icons.expand_more,
+    this.placeholder = false,
+  });
+
+  final String value;
+  final VoidCallback onTap;
+  final IconData icon;
+
+  /// Renders [value] in the hint colour, for "No project" style empties.
+  final bool placeholder;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Material(
+      color: p.surfaceMuted,
+      borderRadius: BorderRadius.circular(MondayRadius.field),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(MondayRadius.field),
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(MondayRadius.field),
+            border: Border.all(color: p.hairline),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  style: MondayType.body.copyWith(
+                    color: placeholder ? p.inkFaint : p.ink,
+                  ),
+                ),
+              ),
+              Icon(icon, size: 18, color: p.inkMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A compact chooser sheet used by [MondaySelectField]. Returns the picked
+/// value, or null if dismissed.
+Future<T?> showMondayOptionSheet<T>({
+  required BuildContext context,
+  required String title,
+  required List<({T value, String label})> options,
+  T? selected,
+}) {
+  return showMondaySheet<T>(
+    context: context,
+    builder: (context) {
+      final p = context.palette;
+      return Container(
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(MondayRadius.sheet),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: p.hairline,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: EyebrowLabel(title.toUpperCase()),
+              ),
+              const SizedBox(height: 14),
+              for (final option in options)
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(option.value),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            option.label,
+                            style: MondayType.rowTitle.copyWith(color: p.ink),
+                          ),
+                        ),
+                        if (option.value == selected)
+                          Icon(Icons.check, size: 19, color: p.green),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}

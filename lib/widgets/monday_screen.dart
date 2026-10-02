@@ -12,12 +12,17 @@ class MondayScreen extends StatelessWidget {
     required this.children,
     this.showBack = false,
     this.fab,
+    this.headerAction,
     this.bottomPadding = 40,
   });
 
   final List<Widget> children;
   final bool showBack;
   final Widget? fab;
+
+  /// Optional control shown opposite the back button, for screen-level
+  /// actions such as "edit".
+  final Widget? headerAction;
 
   /// Raised by callers that sit above the bottom navigation bar.
   final double bottomPadding;
@@ -39,7 +44,13 @@ class MondayScreen extends StatelessWidget {
           ),
           children: [
             if (showBack) ...[
-              const MondayBackButton(),
+              Row(
+                children: [
+                  const MondayBackButton(),
+                  const Spacer(),
+                  ?headerAction,
+                ],
+              ),
               const SizedBox(height: 44),
             ],
             ...children,
