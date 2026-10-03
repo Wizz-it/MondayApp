@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/calendar_event.dart';
+import '../models/note.dart';
 import '../models/project.dart';
 import '../models/tile_tint.dart';
 import '../services/app_store.dart';
@@ -9,8 +10,8 @@ import '../utils/date_labels.dart';
 import 'monday_sheet.dart';
 
 /// The five creation flows from the reference. Each is a bottom sheet sharing
-/// the [MondaySheet] chrome; each writes straight to the [AppStore]. The event
-/// and project sheets double as the edit forms for existing ones.
+/// the [MondaySheet] chrome; each writes straight to the [AppStore]. The event,
+/// project and note sheets double as the edit forms for existing ones.
 
 Future<void> showNewTaskSheet(BuildContext context, {String? projectId}) {
   return showMondaySheet<void>(
@@ -60,7 +61,15 @@ Future<void> showEditProjectSheet(BuildContext context, Project project) {
 Future<void> showNewNoteSheet(BuildContext context) {
   return showMondaySheet<void>(
     context: context,
-    builder: (_) => const _NewNoteSheet(),
+    builder: (_) => const _NoteSheet(),
+  );
+}
+
+/// The new-note sheet, opened pre-filled for [note].
+Future<void> showEditNoteSheet(BuildContext context, Note note) {
+  return showMondaySheet<void>(
+    context: context,
+    builder: (_) => _NoteSheet(note: note),
   );
 }
 
@@ -414,18 +423,23 @@ class _ProjectSheetState extends State<_ProjectSheet> {
   }
 }
 
-// New note -------------------------------------------------------------------
+// New / edit note ------------------------------------------------------------
 
-class _NewNoteSheet extends StatefulWidget {
-  const _NewNoteSheet();
+class _NoteSheet extends StatefulWidget {
+  const _NoteSheet({this.note});
+
+  /// The note being edited, or null when creating one.
+  final Note? note;
 
   @override
-  State<_NewNoteSheet> createState() => _NewNoteSheetState();
+  State<_NoteSheet> createState() => _NoteSheetState();
 }
 
-class _NewNoteSheetState extends State<_NewNoteSheet> {
-  final _title = TextEditingController();
-  final _body = TextEditingController();
+class _NoteSheetState extends State<_NoteSheet> {
+  late final _title = TextEditingController(text: widget.note?.title);
+  late final _body = TextEditingController(text: widget.note?.body);
+
+  bool get _isEditing => widget.note != null;
 
   @override
   void dispose() {
@@ -435,25 +449,33 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
   }
 
   void _submit() {
-    AppScope.read(context).addNote(
-      title: _title.text.trim(),
-      body: _body.text.trim(),
-    );
+    final store = AppScope.read(context);
+    final existing = widget.note;
+    if (existing == null) {
+      store.addNote(title: _title.text.trim(), body: _body.text.trim());
+    } else {
+      store.updateNote(
+        existing,
+        title: _title.text.trim(),
+        body: _body.text.trim(),
+      );
+    }
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     return MondaySheet(
-      title: 'New note',
-      actionLabel: 'Create note',
+      eyebrow: _isEditing ? 'MAKE IT YOURS' : 'MAKE IT HAPPEN',
+      title: _isEditing ? 'Edit note' : 'New note',
+      actionLabel: _isEditing ? 'Save changes' : 'Create note',
       onAction: _title.text.trim().isEmpty ? null : _submit,
       children: [
         MondayField(
           label: 'Title',
           child: MondayTextField(
             controller: _title,
-            autofocus: true,
+            autofocus: !_isEditing,
             hintText: 'Name your note',
             onChanged: (_) => setState(() {}),
           ),

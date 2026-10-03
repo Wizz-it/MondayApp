@@ -473,9 +473,19 @@ class AppStore extends ChangeNotifier {
 
   // Notes ------------------------------------------------------------------
 
-  void addNote({required String title, String body = ''}) {
-    notes.add(Note(id: _id('note'), title: title, body: body));
+  Note addNote({required String title, String body = ''}) {
+    final note = Note(id: _id('note'), title: title, body: body);
+    notes.add(note);
     _commit();
+    return note;
+  }
+
+  /// Looks a note up by id, for the same reason as [taskById].
+  Note? noteById(String id) {
+    for (final note in notes) {
+      if (note.id == id) return note;
+    }
+    return null;
   }
 
   void updateNote(Note note, {String? title, String? body}) {

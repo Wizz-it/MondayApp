@@ -52,11 +52,16 @@ class NotesScreen extends StatelessWidget {
               mainAxisSpacing: 12,
               childAspectRatio: 0.84,
             ),
-            itemBuilder: (context, i) => NoteCard(
-              note: notes[i],
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => NoteDetailScreen(note: notes[i]),
+            // Long-press deletes without opening the note, with the same
+            // confirmation as the detail screen.
+            itemBuilder: (context, i) => GestureDetector(
+              onLongPress: () => confirmDeleteNote(context, notes[i]),
+              child: NoteCard(
+                note: notes[i],
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NoteDetailScreen(noteId: notes[i].id),
+                  ),
                 ),
               ),
             ),
