@@ -108,6 +108,7 @@ class AppStore extends ChangeNotifier {
         'preferences': {
           'themeMode': themeMode.name,
           'notificationsEnabled': notificationsEnabled,
+          'notificationPermissionRequested': notificationPermissionRequested,
         },
         'projects': [for (final p in projects) p.toJson()],
         'tasks': [for (final t in tasks) t.toJson()],
@@ -124,6 +125,8 @@ class AppStore extends ChangeNotifier {
     themeMode =
         ThemeMode.values.asNameMap()[prefs['themeMode']] ?? ThemeMode.light;
     notificationsEnabled = prefs['notificationsEnabled'] as bool? ?? true;
+    notificationPermissionRequested =
+        prefs['notificationPermissionRequested'] as bool? ?? false;
 
     projects.addAll(list('projects').map(Project.fromJson));
     tasks.addAll(list('tasks').map(Task.fromJson));
@@ -159,6 +162,10 @@ class AppStore extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.light;
   bool notificationsEnabled = true;
 
+  /// Whether the app has already shown the system notification prompt, so
+  /// it is only ever shown once without the user asking.
+  bool notificationPermissionRequested = false;
+
   bool get isDarkMode => themeMode == ThemeMode.dark;
 
   void toggleThemeMode() {
@@ -168,6 +175,11 @@ class AppStore extends ChangeNotifier {
 
   void setNotificationsEnabled(bool value) {
     notificationsEnabled = value;
+    _commit();
+  }
+
+  void markNotificationPermissionRequested() {
+    notificationPermissionRequested = true;
     _commit();
   }
 

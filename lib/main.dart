@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'screens/calendar_screen.dart';
@@ -6,6 +8,8 @@ import 'screens/more_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'services/app_storage.dart';
 import 'services/app_store.dart';
+import 'services/notification_service.dart';
+import 'services/reminder_scheduler.dart';
 import 'theme/app_theme.dart';
 import 'theme/palette.dart';
 import 'widgets/monday_bottom_nav.dart';
@@ -15,7 +19,20 @@ Future<void> main() async {
   // Load saved data before the first frame so the UI never shows seed data
   // that is about to be replaced. The platform splash covers the wait.
   final store = await AppStore.open(SharedPreferencesAppStorage());
+
+  // Notifications follow the store from here on. Nothing waits on them: if
+  // the platform refuses, the app works the same, just without reminders.
+  final notifications = LocalNotificationService();
+  await notifications.initialize();
+  final reminders = ReminderScheduler(store, notifications);
+  unawaited(reminders.start());
+
   runApp(MondayApp(store: store));
+
+  // The permission prompt needs a visible activity, so ask after first frame.
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => unawaited(reminders.requestPermissionOnce()),
+  );
 }
 
 class MondayApp extends StatefulWidget {
