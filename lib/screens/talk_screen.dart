@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../assistant/assistant_controller.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
+import '../widgets/grouped_card.dart';
 import '../widgets/monday_buttons.dart';
 import '../widgets/screen_header.dart';
 
@@ -10,9 +12,17 @@ import '../widgets/screen_header.dart';
 ///
 /// Voice capture is not wired up yet, so the screen presents the reference's
 /// typed fallback: tapping the mic explains that speech is unavailable and
-/// hands over to the text field, which saves straight to the inbox.
+/// hands over to the text field.
+///
+/// Without an [assistant] the text field saves straight to the inbox, as it
+/// always has. With one, the text goes to the assistant and its reply —
+/// including questions, confirmations and a save-to-inbox fallback — shows
+/// under the mic.
 class TalkScreen extends StatefulWidget {
-  const TalkScreen({super.key});
+  const TalkScreen({super.key, this.assistant});
+
+  /// Owned by the caller, which also disposes it.
+  final AssistantController? assistant;
 
   @override
   State<TalkScreen> createState() => _TalkScreenState();
@@ -44,14 +54,20 @@ class _TalkScreenState extends State<TalkScreen>
 
   void _submit() {
     final text = _input.text.trim();
-    if (text.isEmpty) return;
-    AppScope.read(context).captureThought(text);
+    final assistant = widget.assistant;
+    if (text.isEmpty || (assistant?.isBusy ?? false)) return;
+
+    if (assistant != null) {
+      assistant.submit(text);
+    } else {
+      AppScope.read(context).captureThought(text);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved to your inbox.')),
+      );
+    }
     _input.clear();
     _focus.unfocus();
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved to your inbox.')),
-    );
   }
 
   @override
@@ -130,6 +146,11 @@ class _TalkScreenState extends State<TalkScreen>
                           ),
                         ),
                       ],
+                      if (widget.assistant case final assistant?)
+                        ListenableBuilder(
+                          listenable: assistant,
+                          builder: (context, _) => _AssistantReply(assistant),
+                        ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -137,11 +158,15 @@ class _TalkScreenState extends State<TalkScreen>
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: _TypeField(
-                  controller: _input,
-                  focusNode: _focus,
-                  onChanged: (_) => setState(() {}),
-                  onSubmit: _submit,
+                child: ListenableBuilder(
+                  listenable: widget.assistant ?? const _NeverChanges(),
+                  builder: (context, _) => _TypeField(
+                    controller: _input,
+                    focusNode: _focus,
+                    enabled: !(widget.assistant?.isBusy ?? false),
+                    onChanged: (_) => setState(() {}),
+                    onSubmit: _submit,
+                  ),
                 ),
               ),
             ],
@@ -180,12 +205,145 @@ class _MicButton extends StatelessWidget {
   }
 }
 
+/// The assistant's reply to the latest request, under the mic.
+class _AssistantReply extends StatelessWidget {
+  const _AssistantReply(this.assistant);
+
+  final AssistantController assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final body = MondayType.body.copyWith(color: p.ink, fontSize: 14);
+
+    final (transcript, content) = switch (assistant.state) {
+      AssistantIdle() => (null, null),
+      AssistantProcessing(:final transcript) => (
+          transcript,
+          Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: p.green,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'MONDAY sedang memproses...',
+                style: body.copyWith(color: p.inkMuted),
+              ),
+            ],
+          ),
+        ),
+      AssistantSucceeded(:final transcript, :final message) ||
+      AssistantNeedsClarification(:final transcript, :final message) =>
+        (transcript, Text(message, style: body)),
+      final AssistantNeedsConfirmation state => (
+          state.transcript,
+          _withActions(Text(state.message, style: body), [
+            _ReplyAction(
+              label: state.withoutProject
+                  ? 'Simpan tanpa proyek'
+                  : 'Tetap simpan',
+              primary: true,
+              onTap: assistant.confirm,
+            ),
+            _ReplyAction(label: 'Batal', onTap: assistant.cancel),
+          ]),
+        ),
+      AssistantFailed(:final transcript, :final message) => (
+          transcript,
+          _withActions(Text(message, style: body), [
+            _ReplyAction(
+              label: 'Simpan ke Inbox',
+              primary: true,
+              onTap: assistant.saveToInbox,
+            ),
+          ]),
+        ),
+    };
+    if (transcript == null || content == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 22),
+      child: SurfaceCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '"$transcript"',
+              style: MondayType.rowMeta.copyWith(color: p.inkMuted),
+            ),
+            const SizedBox(height: 10),
+            content,
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _withActions(Widget message, List<Widget> actions) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        message,
+        const SizedBox(height: 8),
+        Wrap(spacing: 4, children: actions),
+      ],
+    );
+  }
+}
+
+class _ReplyAction extends StatelessWidget {
+  const _ReplyAction({
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      ),
+      child: Text(
+        label,
+        style: MondayType.rowTitle.copyWith(
+          color: primary ? p.green : p.inkMuted,
+        ),
+      ),
+    );
+  }
+}
+
+/// Stands in for an absent assistant so the text field can always listen.
+class _NeverChanges implements Listenable {
+  const _NeverChanges();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
+}
+
 class _TypeField extends StatelessWidget {
   const _TypeField({
     required this.controller,
     required this.focusNode,
     required this.onChanged,
     required this.onSubmit,
+    this.enabled = true,
   });
 
   final TextEditingController controller;
@@ -193,10 +351,13 @@ class _TypeField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
 
+  /// False while the assistant is working on the previous request.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final hasText = controller.text.trim().isNotEmpty;
+    final hasText = enabled && controller.text.trim().isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
