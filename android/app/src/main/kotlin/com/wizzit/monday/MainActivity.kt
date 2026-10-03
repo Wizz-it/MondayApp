@@ -1,4 +1,4 @@
-package com.example.mondayapp
+package com.wizzit.monday
 
 import io.flutter.embedding.android.FlutterActivity
 
