@@ -501,13 +501,27 @@ class AppStore extends ChangeNotifier {
 
   // Inbox ------------------------------------------------------------------
 
-  void captureThought(String text) {
-    inbox.add(InboxItem(
+  /// The inbox as it is shown: newest capture first. Sorted by capture time
+  /// rather than trusting list order, so restored or older snapshots read the
+  /// same way; captures with the same time keep the later one first.
+  List<InboxItem> get inboxNewestFirst {
+    final order = {for (final (i, item) in inbox.indexed) item: i};
+    return inbox.toList()
+      ..sort((a, b) {
+        final byTime = b.capturedAt.compareTo(a.capturedAt);
+        return byTime != 0 ? byTime : order[b]!.compareTo(order[a]!);
+      });
+  }
+
+  InboxItem captureThought(String text) {
+    final item = InboxItem(
       id: _id('inbox'),
       text: text,
       capturedAt: DateTime.now(),
-    ));
+    );
+    inbox.add(item);
     _commit();
+    return item;
   }
 
   void deleteInboxItem(InboxItem item) {
