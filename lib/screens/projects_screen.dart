@@ -48,21 +48,27 @@ class ProjectsScreen extends StatelessWidget {
           Column(
             children: [
               for (final project in projects) ...[
-                SurfaceCard(
-                  padding: EdgeInsets.zero,
-                  child: MondayRow(
-                    leading: IconTile(
-                      Icons.folder_outlined,
-                      background: project.tint.background(p),
-                    ),
-                    title: Text(project.name),
-                    subtitle: project.description.isEmpty
-                        ? null
-                        : Text(project.description),
-                    trailing: const RowArrow(),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProjectDetailScreen(project: project),
+                // Long-press deletes without opening the project, with the
+                // same confirmation as the detail screen.
+                GestureDetector(
+                  onLongPress: () => confirmDeleteProject(context, project),
+                  child: SurfaceCard(
+                    padding: EdgeInsets.zero,
+                    child: MondayRow(
+                      leading: IconTile(
+                        Icons.folder_outlined,
+                        background: project.tint.background(p),
+                      ),
+                      title: Text(project.name),
+                      subtitle: project.description.isEmpty
+                          ? null
+                          : Text(project.description),
+                      trailing: const RowArrow(),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProjectDetailScreen(projectId: project.id),
+                        ),
                       ),
                     ),
                   ),

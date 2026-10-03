@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/calendar_event.dart';
+import '../models/project.dart';
+import '../models/tile_tint.dart';
 import '../services/app_store.dart';
 import '../theme/palette.dart';
 import '../utils/date_labels.dart';
@@ -8,7 +10,7 @@ import 'monday_sheet.dart';
 
 /// The five creation flows from the reference. Each is a bottom sheet sharing
 /// the [MondaySheet] chrome; each writes straight to the [AppStore]. The event
-/// sheet doubles as the edit form for an existing event.
+/// and project sheets double as the edit forms for existing ones.
 
 Future<void> showNewTaskSheet(BuildContext context, {String? projectId}) {
   return showMondaySheet<void>(
@@ -43,7 +45,15 @@ Future<CalendarEvent?> showEditEventSheet(
 Future<void> showNewProjectSheet(BuildContext context) {
   return showMondaySheet<void>(
     context: context,
-    builder: (_) => const _NewProjectSheet(),
+    builder: (_) => const _ProjectSheet(),
+  );
+}
+
+/// The new-project sheet, opened pre-filled for [project].
+Future<void> showEditProjectSheet(BuildContext context, Project project) {
+  return showMondaySheet<void>(
+    context: context,
+    builder: (_) => _ProjectSheet(project: project),
   );
 }
 
@@ -305,18 +315,25 @@ class _EventSheetState extends State<_EventSheet> {
   }
 }
 
-// New project ----------------------------------------------------------------
+// New / edit project ---------------------------------------------------------
 
-class _NewProjectSheet extends StatefulWidget {
-  const _NewProjectSheet();
+class _ProjectSheet extends StatefulWidget {
+  const _ProjectSheet({this.project});
+
+  /// The project being edited, or null when creating one.
+  final Project? project;
 
   @override
-  State<_NewProjectSheet> createState() => _NewProjectSheetState();
+  State<_ProjectSheet> createState() => _ProjectSheetState();
 }
 
-class _NewProjectSheetState extends State<_NewProjectSheet> {
-  final _name = TextEditingController();
-  final _description = TextEditingController();
+class _ProjectSheetState extends State<_ProjectSheet> {
+  late final _name = TextEditingController(text: widget.project?.name);
+  late final _description =
+      TextEditingController(text: widget.project?.description);
+  late TileTint? _tint = widget.project?.tint;
+
+  bool get _isEditing => widget.project != null;
 
   @override
   void dispose() {
@@ -326,25 +343,49 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
   }
 
   void _submit() {
-    AppScope.read(context).addProject(
-      name: _name.text.trim(),
-      description: _description.text.trim(),
-    );
+    final store = AppScope.read(context);
+    final existing = widget.project;
+    if (existing == null) {
+      store.addProject(
+        name: _name.text.trim(),
+        description: _description.text.trim(),
+      );
+    } else {
+      store.updateProject(
+        existing,
+        name: _name.text.trim(),
+        description: _description.text.trim(),
+        tint: _tint,
+      );
+    }
     Navigator.of(context).pop();
+  }
+
+  Future<void> _pickTint() async {
+    final picked = await showMondayOptionSheet<TileTint>(
+      context: context,
+      title: 'Colour',
+      selected: _tint!,
+      options: [
+        for (final value in TileTint.values) (value: value, label: value.label),
+      ],
+    );
+    if (picked != null) setState(() => _tint = picked);
   }
 
   @override
   Widget build(BuildContext context) {
     return MondaySheet(
-      title: 'New project',
-      actionLabel: 'Create project',
+      eyebrow: _isEditing ? 'MAKE IT YOURS' : 'MAKE IT HAPPEN',
+      title: _isEditing ? 'Edit project' : 'New project',
+      actionLabel: _isEditing ? 'Save changes' : 'Create project',
       onAction: _name.text.trim().isEmpty ? null : _submit,
       children: [
         MondayField(
           label: 'Name',
           child: MondayTextField(
             controller: _name,
-            autofocus: true,
+            autofocus: !_isEditing,
             hintText: 'Name your project',
             onChanged: (_) => setState(() {}),
           ),
@@ -359,6 +400,15 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
             hintText: 'Add a little more detail...',
           ),
         ),
+        // New projects take the next tint automatically, as before; the
+        // colour can be changed once the project exists.
+        if (_isEditing) ...[
+          const SizedBox(height: 20),
+          MondayField(
+            label: 'Colour',
+            child: MondaySelectField(value: _tint!.label, onTap: _pickTint),
+          ),
+        ],
       ],
     );
   }

@@ -134,6 +134,14 @@ class AppStore extends ChangeNotifier {
     notes.addAll(list('notes').map(Note.fromJson));
     inbox.addAll(list('inbox').map(InboxItem.fromJson));
 
+    // A task can't belong to a project that no longer exists. Deleting a
+    // project already clears these; this repairs any older snapshot.
+    for (final task in tasks) {
+      if (task.projectId != null && projectById(task.projectId) == null) {
+        task.projectId = null;
+      }
+    }
+
     // Never hand out an id that is already taken, even if the saved counter
     // is missing or behind.
     _nextId = math.max(json['nextId'] as int? ?? 0, _idFloor());
@@ -431,13 +439,27 @@ class AppStore extends ChangeNotifier {
 
   String? projectNameFor(Task task) => projectById(task.projectId)?.name;
 
-  void addProject({required String name, String description = ''}) {
-    projects.add(Project(
+  Project addProject({required String name, String description = ''}) {
+    final project = Project(
       id: _id('project'),
       name: name,
       description: description,
       tint: projects.length.isEven ? TileTint.sage : TileTint.lilac,
-    ));
+    );
+    projects.add(project);
+    _commit();
+    return project;
+  }
+
+  void updateProject(
+    Project project, {
+    String? name,
+    String? description,
+    TileTint? tint,
+  }) {
+    if (name != null) project.name = name;
+    if (description != null) project.description = description;
+    if (tint != null) project.tint = tint;
     _commit();
   }
 
