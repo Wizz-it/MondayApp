@@ -1,0 +1,13 @@
+{
+  "transcript": "Buat event meeting dengan dosen hari Jumat jam 2 siang",
+  "response": {
+    "v": 1,
+    "action": {
+      "action": "create_event",
+      "title": "Meeting dengan dosen",
+      "date": { "kind": "weekday", "weekday": "friday", "next_week": false, "day": null, "month": null, "year": null },
+      "time": { "hour": 2, "minute": 0, "daypart": "siang" },
+      "description": null
+    }
+  }
+}

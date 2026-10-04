@@ -1,6 +1,7 @@
 # Dependencies and compiled output
 node_modules/
 lib/
+lib-test/
 
 # Local-only secrets and environment for the emulator. Never commit these.
 .secret.local

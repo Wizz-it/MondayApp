@@ -1,0 +1,7 @@
+{
+  "transcript": "Ingatkan aku",
+  "response": {
+    "v": 1,
+    "action": { "action": "clarify", "question": "Ingatkan tentang apa, dan kapan?" }
+  }
+}

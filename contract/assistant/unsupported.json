@@ -1,0 +1,7 @@
+{
+  "transcript": "Hapus task belajar Flutter",
+  "response": {
+    "v": 1,
+    "action": { "action": "unsupported", "reason": "mock provider has no canned answer" }
+  }
+}

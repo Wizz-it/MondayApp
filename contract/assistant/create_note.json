@@ -1,0 +1,7 @@
+{
+  "transcript": "Catat ide MONDAY sebagai note",
+  "response": {
+    "v": 1,
+    "action": { "action": "create_note", "title": "Ide MONDAY", "body": null }
+  }
+}

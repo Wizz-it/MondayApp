@@ -1,0 +1,7 @@
+{
+  "transcript": "Simpan ini ke inbox",
+  "response": {
+    "v": 1,
+    "action": { "action": "capture_inbox", "text": "ini" }
+  }
+}

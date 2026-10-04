@@ -1,0 +1,13 @@
+{
+  "transcript": "Tambahkan task belajar Flutter besok jam 7",
+  "response": {
+    "v": 1,
+    "action": {
+      "action": "create_task",
+      "title": "Belajar Flutter",
+      "date": { "kind": "tomorrow", "weekday": null, "next_week": null, "day": null, "month": null, "year": null },
+      "time": { "hour": 7, "minute": 0, "daypart": null },
+      "project": null
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "response": {
+    "v": 1,
+    "action": {
+      "action": "create_task",
+      "title": "Rapat proyek",
+      "date": { "kind": "calendar_date", "day": 12, "month": 10, "year": 2026 },
+      "time": { "daypart": "malam" },
+      "project": "MONDAY"
+    }
+  }
+}
