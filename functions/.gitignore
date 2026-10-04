@@ -1,0 +1,11 @@
+# Dependencies and compiled output
+node_modules/
+lib/
+
+# Local-only secrets and environment for the emulator. Never commit these.
+.secret.local
+.env*.local
+*.local
+
+# Logs
+*.log
